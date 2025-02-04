@@ -4,6 +4,7 @@ import com.google.gson.JsonParser;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.io.FileReader;
 import java.util.HashMap;
@@ -40,15 +41,24 @@ public class Texture {
         BufferedImage image;
         Map<String, TextureRegion> regions = new HashMap<>();
 
-        public TextureAtlas(String imagePath) throws Exception {
-            File imageFile = new File(imagePath);
-            if (!imageFile.exists()) {
-                System.err.println("Error: File not found -> " + imageFile.getAbsolutePath());
-                return;
-            }
+        public TextureAtlas(String imagePath) {
+            try {
+                File file = new File(imagePath);
+                System.out.println("Loading Image from: " + file.getAbsolutePath());
 
-            this.image = ImageIO.read(imageFile);
+                if (!file.exists()) {
+                    throw new RuntimeException("Error: Image file not found at " + file.getAbsolutePath());
+                }
+
+                this.image = ImageIO.read(file);
+                if (this.image == null) {
+                    throw new RuntimeException("Error: Image file could not be read.");
+                }
+            } catch (IOException e) {
+                throw new RuntimeException("Error: Failed to load image - " + e.getMessage());
+            }
         }
+
 
         public void addRegion(TextureRegion region) {
             regions.put(region.name, region);
@@ -108,8 +118,20 @@ public class Texture {
     static class JSONParser {
         public TextureAtlas parse(String atlasFile, String imagePath) throws Exception {
             TextureAtlas atlas = new TextureAtlas(imagePath);
-            JsonObject data = JsonParser.parseReader(new FileReader(atlasFile)).getAsJsonObject();
+
+            // Read and print the JSON file content
+            FileReader reader = new FileReader(atlasFile);
+            JsonObject data = JsonParser.parseReader(reader).getAsJsonObject();
+            System.out.println("JSON Content: " + data);  // Debugging output
+
             JsonObject frames = data.getAsJsonObject("frames");
+            if (frames == null) {
+                throw new RuntimeException("Error: 'frames' object not found in JSON file.");
+            }
+
+            if (frames == null) {
+                throw new NullPointerException("Error: 'frames' object is missing in the JSON file.");
+            }
 
             for (Map.Entry<String, com.google.gson.JsonElement> entry : frames.entrySet()) {
                 String name = entry.getKey();
@@ -135,29 +157,22 @@ public class Texture {
                 }
                         : new int[]{0, 0, w, h};  // Default values
 
-
                 TextureRegion region = new TextureRegion(
                         name, x, y, w, h, rotated, trimmed,
-                        new int[] { sourceSize.get("w").getAsInt(), sourceSize.get("h").getAsInt() },
-                        new int[] {
-                                spriteSource.get("x").getAsInt(),
-                                spriteSource.get("y").getAsInt(),
-                                spriteSource.get("w").getAsInt(),
-                                spriteSource.get("h").getAsInt()
-                        });
+                        new int[]{sourceSize.get("w").getAsInt(), sourceSize.get("h").getAsInt()},
+                        spriteSourceValues);
                 atlas.addRegion(region);
             }
             return atlas;
         }
+
     }
 
     // 主方法
     public static void main(String[] args) {
-        System.out.println("Current working directory: " + System.getProperty("user.dir"));
-
         try {
             JSONParser parser = new JSONParser();
-            TextureAtlas atlas = parser.parse("atlas.json", "atlas.png");
+            TextureAtlas atlas = parser.parse("app/src/main/resource/atlas.json", "app/src/main/resource/atlas.png");
 
             // 提取并保存子图（例如提取 "hero"）
             BufferedImage subImage = atlas.getSubImage("hero");
